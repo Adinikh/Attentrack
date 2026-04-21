@@ -1,0 +1,21 @@
+{
+  "name": "attendtrack-pro",
+  "version": "1.0.0",
+  "description": "Full-stack attendance tracker with student, faculty, and admin portals.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "seed": "node server/seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.8.1",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
+    "pdfkit": "^0.18.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.3.6"
+  }
+}
