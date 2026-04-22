@@ -41,7 +41,10 @@
               </label>
               <label>
                 <span>Password</span>
-                <input id="password" type="password" required />
+                <div class="password-row">
+                  <input id="password" type="password" required />
+                  <button type="button" class="password-toggle" id="toggle-password">Show</button>
+                </div>
               </label>
               <button type="submit" class="primary-btn">Log In</button>
               <p class="form-error" id="login-error"></p>

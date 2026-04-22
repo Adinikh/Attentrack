@@ -44,6 +44,7 @@ function bindEvents() {
   });
 
   on("login-form", "submit", onLogin);
+  on("toggle-password", "click", togglePasswordVisibility);
   on("logout-btn", "click", onLogout);
   on("change-password-form", "submit", changePassword);
 
@@ -78,6 +79,16 @@ function on(id, eventName, handler) {
   if (element) {
     element.addEventListener(eventName, handler);
   }
+}
+
+function togglePasswordVisibility() {
+  const passwordInput = document.getElementById("password");
+  const toggleButton = document.getElementById("toggle-password");
+  if (!passwordInput || !toggleButton) return;
+
+  const isHidden = passwordInput.type === "password";
+  passwordInput.type = isHidden ? "text" : "password";
+  toggleButton.textContent = isHidden ? "Hide" : "Show";
 }
 
 async function hydrateSession() {

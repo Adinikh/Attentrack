@@ -156,6 +156,23 @@ form label + label {
   margin-top: 14px;
 }
 
+.password-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.password-toggle {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--brand-deep);
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 input,
 select,
 textarea,
