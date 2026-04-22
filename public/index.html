@@ -117,6 +117,25 @@
                 <div id="student-chart" class="chart-stack"></div>
               </div>
             </div>
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <h3>What-If Simulator</h3>
+                  <p>Plan upcoming classes and check your projected subject attendance instantly.</p>
+                </div>
+              </div>
+              <div class="whatif-grid">
+                <label>
+                  <span>Subject</span>
+                  <select id="whatif-subject"></select>
+                </label>
+                <label>
+                  <span>Classes You Will Attend</span>
+                  <input id="whatif-upcoming" type="number" min="1" value="10" />
+                </label>
+              </div>
+              <div class="report-card whatif-result" id="whatif-result"></div>
+            </div>
           </section>
 
           <section class="page" data-page="student-history">

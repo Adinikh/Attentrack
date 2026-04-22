@@ -1,6 +1,7 @@
 const state = {
   role: "student",
   user: null,
+  studentSubjects: [],
   facultySubjects: [],
   students: [],
   adminFaculty: [],
@@ -51,6 +52,8 @@ function bindEvents() {
   on("student-history-select", "change", loadStudentHistory);
   on("student-export-pdf", "click", () => downloadFile("/api/student/report.pdf"));
   on("student-export-xlsx", "click", () => downloadFile("/api/student/report.xlsx"));
+  on("whatif-subject", "change", renderWhatIfProjection);
+  on("whatif-upcoming", "input", renderWhatIfProjection);
 
   on("load-attendance-btn", "click", loadFacultyAttendance);
   on("save-attendance-btn", "click", saveAttendance);
@@ -212,6 +215,7 @@ function switchPage(pageKey, trigger) {
 
 async function loadStudentDashboard() {
   const data = await api("/api/student/dashboard");
+  state.studentSubjects = data.summary.subjects;
   renderAnnouncements("student-announcements", data.announcements);
   renderStats("student-stats", [
     { label: "Overall Attendance", value: `${data.summary.stats.overallPercentage}%`, note: "Across all enrolled subjects" },
@@ -238,9 +242,59 @@ async function loadStudentDashboard() {
   document.getElementById("student-history-select").innerHTML = data.summary.subjects
     .map((subject) => `<option value="${subject.id}">${subject.code} - ${subject.name}</option>`)
     .join("");
+  document.getElementById("whatif-subject").innerHTML = data.summary.subjects
+    .map((subject) => `<option value="${subject.id}">${subject.code} - ${subject.name}</option>`)
+    .join("");
 
   renderChart("student-chart", data.chart, "%");
+  renderWhatIfProjection();
   await loadStudentHistory();
+}
+
+function renderWhatIfProjection() {
+  const subjectSelect = document.getElementById("whatif-subject");
+  const classesInput = document.getElementById("whatif-upcoming");
+  const result = document.getElementById("whatif-result");
+  if (!subjectSelect || !classesInput || !result) return;
+
+  if (!state.studentSubjects.length) {
+    result.innerHTML = `<p class="help-text">No subjects found for projection.</p>`;
+    return;
+  }
+
+  const subjectId = Number(subjectSelect.value);
+  const subject = state.studentSubjects.find((item) => item.id === subjectId) || state.studentSubjects[0];
+  const planned = Math.max(0, Number(classesInput.value) || 0);
+
+  if (!planned) {
+    result.innerHTML = `<p class="help-text">Enter how many upcoming classes you plan to attend.</p>`;
+    return;
+  }
+
+  const projectedAttended = subject.attendedClasses + planned;
+  const projectedTotal = subject.totalClasses + planned;
+  const projectedPercentage = Math.round((projectedAttended * 100) / projectedTotal);
+  const projectedStatus = getStatusForThreshold(projectedPercentage, subject.threshold);
+  const requiredAfterPlan = classesNeededToReachThreshold(projectedAttended, projectedTotal, subject.threshold);
+
+  result.innerHTML = `
+    <h4>${subject.code} Projection</h4>
+    <p>
+      If you attend the next <strong>${planned}</strong> classes, your attendance becomes
+      <strong>${projectedAttended}/${projectedTotal}</strong>.
+    </p>
+    <p class="whatif-meta">
+      Projected: <span class="pill ${projectedStatus}">${projectedPercentage}%</span>
+      Threshold: <strong>${subject.threshold}%</strong>
+    </p>
+    <p>
+      ${
+        requiredAfterPlan === 0
+          ? "You will be above the threshold. Keep this pace."
+          : `Still short by threshold. You need ${requiredAfterPlan} more fully attended classes after this plan.`
+      }
+    </p>
+  `;
 }
 
 async function loadStudentHistory() {
@@ -790,4 +844,26 @@ function formatDate(value) {
 
 function capitalize(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function getStatusForThreshold(percentage, threshold) {
+  if (percentage < threshold - 10) return "critical";
+  if (percentage < threshold) return "warning";
+  return "healthy";
+}
+
+function classesNeededToReachThreshold(attended, total, threshold) {
+  if (total === 0) {
+    const needed = Math.ceil((threshold / 100) * 1);
+    return Math.max(0, needed);
+  }
+
+  if ((attended / total) * 100 >= threshold) return 0;
+
+  let extra = 0;
+  while (((attended + extra) / (total + extra)) * 100 < threshold) {
+    extra += 1;
+    if (extra > 1000) break;
+  }
+  return extra;
 }
