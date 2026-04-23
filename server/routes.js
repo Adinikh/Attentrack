@@ -1,10 +1,12 @@
 const bcrypt = require("bcryptjs");
+const XLSX = require("xlsx");
 
 const { getDb } = require("./db");
 const { clearAuthCookie, requireAuth, requireRole, setAuthCookie, signAuthToken } = require("./auth");
 const { buildPdfBuffer, buildWorkbookBuffer } = require("./reports");
 const {
   assignmentSchema,
+  bulkStudentImportSchema,
   attendanceSchema,
   changePasswordSchema,
   facultySchema,
@@ -267,6 +269,26 @@ function buildFacultyExportRows(subjectId) {
       Status: student.status
     }))
   };
+}
+
+function createStudentAccount(db, payload) {
+  const userId = db
+    .prepare("INSERT INTO users (role, full_name, email, password_hash) VALUES ('student', ?, ?, ?)")
+    .run(payload.fullName, payload.email, bcrypt.hashSync("password123", 10)).lastInsertRowid;
+
+  db.prepare(
+    `INSERT INTO students
+     (user_id, roll_number, program, semester, section, guardian_name, guardian_phone)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    userId,
+    payload.rollNumber,
+    payload.program,
+    payload.semester,
+    payload.section,
+    payload.guardianName,
+    payload.guardianPhone
+  );
 }
 
 function sendWorkbook(res, filename, sheetName, rows) {
@@ -552,7 +574,7 @@ function registerRoutes(app) {
     }
   });
 
-  app.get("/api/faculty/students", requireRole("faculty", "admin"), (req, res) => {
+  app.get("/api/faculty/students", requireRole("admin"), (req, res) => {
     const students = db
       .prepare(
         `SELECT s.id, s.user_id, s.roll_number, s.program, s.semester, s.section, s.guardian_name, s.guardian_phone,
@@ -565,26 +587,107 @@ function registerRoutes(app) {
     res.json({ students });
   });
 
-  app.post("/api/faculty/students", requireRole("faculty", "admin"), (req, res, next) => {
+  app.get("/api/admin/students/template.xlsx", requireRole("admin"), (req, res) => {
+    sendWorkbook(res, "student-import-template.xlsx", "Students", [
+      {
+        fullName: "Aarav Patel",
+        email: "aarav.patel@example.edu",
+        rollNumber: "IT2401",
+        program: "B.Tech IT",
+        semester: 6,
+        section: "A",
+        guardianName: "Ramesh Patel",
+        guardianPhone: "9876543210"
+      }
+    ]);
+  });
+
+  app.post("/api/admin/students/import", requireRole("admin"), (req, res, next) => {
+    try {
+      const payload = parseSchema(bulkStudentImportSchema, req.body);
+      const workbook = XLSX.read(Buffer.from(payload.fileBase64, "base64"), { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+
+      if (!sheetName) {
+        const error = new Error("The uploaded Excel file does not contain any sheet.");
+        error.status = 400;
+        throw error;
+      }
+
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+        defval: "",
+        raw: false
+      });
+
+      if (!rows.length) {
+        const error = new Error("The uploaded Excel file is empty.");
+        error.status = 400;
+        throw error;
+      }
+
+      const seenEmails = new Set();
+      const seenRollNumbers = new Set();
+      const students = rows.map((row, index) => {
+        let parsed;
+        try {
+          parsed = parseSchema(studentSchema, row);
+        } catch (error) {
+          error.message = `Excel row ${index + 2}: ${error.message}`;
+          throw error;
+        }
+
+        const emailKey = parsed.email.toLowerCase();
+        const rollKey = parsed.rollNumber.toLowerCase();
+
+        if (seenEmails.has(emailKey)) {
+          const error = new Error(`Duplicate email found in Excel at row ${index + 2}.`);
+          error.status = 400;
+          throw error;
+        }
+
+        if (seenRollNumbers.has(rollKey)) {
+          const error = new Error(`Duplicate roll number found in Excel at row ${index + 2}.`);
+          error.status = 400;
+          throw error;
+        }
+
+        seenEmails.add(emailKey);
+        seenRollNumbers.add(rollKey);
+        return parsed;
+      });
+
+      const existingUserByEmail = db.prepare("SELECT email FROM users WHERE email = ?");
+      const existingStudentByRoll = db.prepare("SELECT roll_number FROM students WHERE roll_number = ?");
+
+      students.forEach((student, index) => {
+        if (existingUserByEmail.get(student.email)) {
+          const error = new Error(`Excel row ${index + 2}: email already exists in the system.`);
+          error.status = 400;
+          throw error;
+        }
+
+        if (existingStudentByRoll.get(student.rollNumber)) {
+          const error = new Error(`Excel row ${index + 2}: roll number already exists in the system.`);
+          error.status = 400;
+          throw error;
+        }
+      });
+
+      db.transaction(() => {
+        students.forEach((student) => createStudentAccount(db, student));
+      })();
+
+      res.json({ ok: true, importedCount: students.length });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/faculty/students", requireRole("admin"), (req, res, next) => {
     try {
       const payload = parseSchema(studentSchema, req.body);
       db.transaction(() => {
-        const userId = db
-          .prepare("INSERT INTO users (role, full_name, email, password_hash) VALUES ('student', ?, ?, ?)")
-          .run(payload.fullName, payload.email, bcrypt.hashSync("password123", 10)).lastInsertRowid;
-        db.prepare(
-          `INSERT INTO students
-           (user_id, roll_number, program, semester, section, guardian_name, guardian_phone)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
-        ).run(
-          userId,
-          payload.rollNumber,
-          payload.program,
-          payload.semester,
-          payload.section,
-          payload.guardianName,
-          payload.guardianPhone
-        );
+        createStudentAccount(db, payload);
       })();
       res.json({ ok: true });
     } catch (error) {
@@ -592,7 +695,7 @@ function registerRoutes(app) {
     }
   });
 
-  app.put("/api/faculty/students/:studentId", requireRole("faculty", "admin"), (req, res, next) => {
+  app.put("/api/faculty/students/:studentId", requireRole("admin"), (req, res, next) => {
     try {
       const payload = parseSchema(studentSchema, req.body);
       const studentId = Number(req.params.studentId);
@@ -630,7 +733,7 @@ function registerRoutes(app) {
     }
   });
 
-  app.delete("/api/faculty/students/:studentId", requireRole("faculty", "admin"), (req, res, next) => {
+  app.delete("/api/faculty/students/:studentId", requireRole("admin"), (req, res, next) => {
     try {
       const studentId = Number(req.params.studentId);
       const student = db.prepare("SELECT user_id FROM students WHERE id = ?").get(studentId);
@@ -647,43 +750,38 @@ function registerRoutes(app) {
     }
   });
 
-  app.get("/api/faculty/subjects", requireRole("faculty", "admin"), (req, res) => {
-    const subjects =
-      req.user.role === "faculty"
-        ? getFacultyOwnedSubjects(req.user.id)
-        : db
-            .prepare(
-              `SELECT sub.id, sub.code, sub.name, sub.semester, sub.section, sub.attendance_threshold,
-                      sub.faculty_id, u.full_name AS faculty_name
-               FROM subjects sub
-               JOIN faculty f ON f.id = sub.faculty_id
-               JOIN users u ON u.id = f.user_id
-               ORDER BY sub.name`
-            )
-            .all();
+  app.get("/api/faculty/subjects", requireRole("admin"), (req, res) => {
+    const subjects = db
+      .prepare(
+        `SELECT sub.id, sub.code, sub.name, sub.semester, sub.section, sub.attendance_threshold,
+                sub.faculty_id, u.full_name AS faculty_name
+         FROM subjects sub
+         JOIN faculty f ON f.id = sub.faculty_id
+         JOIN users u ON u.id = f.user_id
+         ORDER BY sub.name`
+      )
+      .all();
     res.json({ subjects });
   });
 
-  app.post("/api/faculty/subjects", requireRole("faculty", "admin"), (req, res, next) => {
+  app.post("/api/faculty/subjects", requireRole("admin"), (req, res, next) => {
     try {
       const payload = parseSchema(subjectSchema, req.body);
-      const facultyId = req.user.role === "faculty" ? getFacultyIdByUserId(req.user.id) : payload.facultyId;
       db.prepare(
         `INSERT INTO subjects (code, name, faculty_id, semester, section, attendance_threshold)
          VALUES (?, ?, ?, ?, ?, ?)`
-      ).run(payload.code, payload.name, facultyId, payload.semester, payload.section, payload.attendanceThreshold);
+      ).run(payload.code, payload.name, payload.facultyId, payload.semester, payload.section, payload.attendanceThreshold);
       res.json({ ok: true });
     } catch (error) {
       next(error);
     }
   });
 
-  app.put("/api/faculty/subjects/:subjectId", requireRole("faculty", "admin"), (req, res, next) => {
+  app.put("/api/faculty/subjects/:subjectId", requireRole("admin"), (req, res, next) => {
     try {
       const payload = parseSchema(subjectSchema, req.body);
       const subjectId = Number(req.params.subjectId);
       ensureFacultyOwnsSubject(req, subjectId);
-      const facultyId = req.user.role === "faculty" ? getFacultyIdByUserId(req.user.id) : payload.facultyId;
       db.prepare(
         `UPDATE subjects
          SET code = ?, name = ?, faculty_id = ?, semester = ?, section = ?, attendance_threshold = ?
@@ -691,7 +789,7 @@ function registerRoutes(app) {
       ).run(
         payload.code,
         payload.name,
-        facultyId,
+        payload.facultyId,
         payload.semester,
         payload.section,
         payload.attendanceThreshold,
@@ -703,7 +801,7 @@ function registerRoutes(app) {
     }
   });
 
-  app.delete("/api/faculty/subjects/:subjectId", requireRole("faculty", "admin"), (req, res, next) => {
+  app.delete("/api/faculty/subjects/:subjectId", requireRole("admin"), (req, res, next) => {
     try {
       const subjectId = Number(req.params.subjectId);
       ensureFacultyOwnsSubject(req, subjectId);
@@ -714,7 +812,7 @@ function registerRoutes(app) {
     }
   });
 
-  app.get("/api/faculty/subjects/:subjectId/assignment", requireRole("faculty", "admin"), (req, res, next) => {
+  app.get("/api/faculty/subjects/:subjectId/assignment", requireRole("admin"), (req, res, next) => {
     try {
       const subjectId = Number(req.params.subjectId);
       ensureFacultyOwnsSubject(req, subjectId);
@@ -748,7 +846,7 @@ function registerRoutes(app) {
     }
   });
 
-  app.post("/api/faculty/subjects/:subjectId/assign-students", requireRole("faculty", "admin"), (req, res, next) => {
+  app.post("/api/faculty/subjects/:subjectId/assign-students", requireRole("admin"), (req, res, next) => {
     try {
       const subjectId = Number(req.params.subjectId);
       ensureFacultyOwnsSubject(req, subjectId);
@@ -765,7 +863,7 @@ function registerRoutes(app) {
 
   app.delete(
     "/api/faculty/subjects/:subjectId/students/:studentId",
-    requireRole("faculty", "admin"),
+    requireRole("admin"),
     (req, res, next) => {
       try {
         const subjectId = Number(req.params.subjectId);

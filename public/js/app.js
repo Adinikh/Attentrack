@@ -4,6 +4,7 @@ const state = {
   studentSubjects: [],
   facultySubjects: [],
   students: [],
+  subjects: [],
   adminFaculty: [],
   selectedAttendanceRecords: [],
   assignmentSubjectId: null
@@ -20,11 +21,13 @@ const navConfig = {
     { key: "faculty-overview", label: "Overview" },
     { key: "faculty-attendance", label: "Mark Attendance" },
     { key: "faculty-reports", label: "Reports" },
-    { key: "faculty-manage", label: "Manage Data" },
     { key: "account", label: "Account" }
   ],
   admin: [
-    { key: "admin-overview", label: "Admin Control" },
+    { key: "admin-overview", label: "Overview" },
+    { key: "admin-faculty", label: "Add Faculty" },
+    { key: "admin-students", label: "Add Student" },
+    { key: "admin-subjects", label: "Add Subject" },
     { key: "account", label: "Account" }
   ]
 };
@@ -68,11 +71,13 @@ function bindEvents() {
   });
 
   on("student-create-form", "submit", saveStudent);
+  on("student-import-form", "submit", importStudentsFromExcel);
   on("subject-create-form", "submit", saveSubject);
   on("faculty-create-form", "submit", saveFaculty);
   on("clear-student-form", "click", () => clearForm("student-create-form"));
   on("clear-subject-form", "click", () => clearForm("subject-create-form"));
   on("clear-faculty-form", "click", () => clearForm("faculty-create-form"));
+  on("student-template-download", "click", () => downloadFile("/api/admin/students/template.xlsx"));
   on("assignment-subject-select", "change", loadAssignmentPanel);
   on("assign-students-btn", "click", assignStudentsToSubject);
 }
@@ -171,7 +176,6 @@ async function loadRoleDashboard() {
     await loadStudentDashboard();
   } else if (state.role === "faculty") {
     await loadFacultyDashboard();
-    await loadFacultyManageData();
   } else {
     await loadAdminDashboard();
   }
@@ -206,8 +210,10 @@ function switchPage(pageKey, trigger) {
     "faculty-overview": "Faculty Overview",
     "faculty-attendance": "Mark Attendance",
     "faculty-reports": "Faculty Reports",
-    "faculty-manage": "Manage Students and Subjects",
-    "admin-overview": "Admin Control Center",
+    "admin-overview": "Admin Overview",
+    "admin-faculty": "Faculty Management",
+    "admin-students": "Student Management",
+    "admin-subjects": "Subject Management",
     account: "Account Security"
   };
   document.getElementById("page-title").textContent = titles[pageKey] || "Dashboard";
@@ -339,13 +345,11 @@ async function loadFacultyDashboard() {
   const subjectOptions = data.subjects.map((subject) => `<option value="${subject.id}">${subject.code} - ${subject.name}</option>`).join("");
   document.getElementById("faculty-subject-select").innerHTML = subjectOptions;
   document.getElementById("faculty-report-subject").innerHTML = subjectOptions;
-  document.getElementById("assignment-subject-select").innerHTML = subjectOptions;
   document.getElementById("faculty-date").value = new Date().toISOString().slice(0, 10);
 
   renderChart("faculty-chart", data.chart, "%");
   await loadFacultyAttendance();
   await loadFacultyReport();
-  await loadAssignmentPanel();
 }
 
 async function loadFacultyAttendance(event) {
@@ -433,53 +437,6 @@ async function loadFacultyReport() {
     .join("");
 }
 
-async function loadFacultyManageData() {
-  const studentsData = await api("/api/faculty/students");
-  const subjectsData = await api("/api/faculty/subjects");
-  state.students = studentsData.students;
-  state.facultySubjects = subjectsData.subjects;
-
-  document.getElementById("faculty-students-table").innerHTML = state.students
-    .map(
-      (student) => `
-        <tr>
-          <td>${student.roll_number}</td>
-          <td>${student.full_name}</td>
-          <td>${student.semester} / ${student.section}</td>
-          <td>
-            <div class="action-buttons">
-              <button class="ghost-btn mini" onclick="editStudent(${student.id})">Edit</button>
-              <button class="danger-btn mini" onclick="deleteStudent(${student.id})">Delete</button>
-            </div>
-          </td>
-        </tr>
-      `
-    )
-    .join("");
-
-  document.getElementById("faculty-subjects-table").innerHTML = state.facultySubjects
-    .map(
-      (subject) => `
-        <tr>
-          <td>${subject.code}</td>
-          <td>${subject.name}</td>
-          <td>${subject.attendance_threshold}%</td>
-          <td>
-            <div class="action-buttons">
-              <button class="ghost-btn mini" onclick="editSubject(${subject.id})">Edit</button>
-              <button class="danger-btn mini" onclick="deleteSubject(${subject.id})">Delete</button>
-            </div>
-          </td>
-        </tr>
-      `
-    )
-    .join("");
-
-  document.getElementById("assignment-subject-select").innerHTML = state.facultySubjects
-    .map((subject) => `<option value="${subject.id}">${subject.code} - ${subject.name}</option>`)
-    .join("");
-}
-
 async function saveStudent(event) {
   event.preventDefault();
   try {
@@ -494,8 +451,35 @@ async function saveStudent(event) {
     });
     clearForm("student-create-form");
     toast(studentId ? "Student updated." : "Student created. Default password is password123.");
-    await loadFacultyManageData();
-    await loadFacultyDashboard();
+    await loadAdminDashboard();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function importStudentsFromExcel(event) {
+  event.preventDefault();
+
+  try {
+    const fileInput = document.getElementById("student-import-file");
+    const file = fileInput?.files?.[0];
+    if (!file) {
+      toast("Choose an Excel file first.");
+      return;
+    }
+
+    const fileBase64 = await readFileAsBase64(file);
+    const data = await api("/api/admin/students/import", {
+      method: "POST",
+      body: JSON.stringify({
+        fileName: file.name,
+        fileBase64
+      })
+    });
+
+    event.target.reset();
+    toast(`${data.importedCount} students imported successfully.`);
+    await loadAdminDashboard();
   } catch (error) {
     toast(error.message);
   }
@@ -515,8 +499,7 @@ async function saveSubject(event) {
     });
     clearForm("subject-create-form");
     toast(subjectId ? "Subject updated." : "Subject created.");
-    await loadFacultyManageData();
-    await loadFacultyDashboard();
+    await loadAdminDashboard();
   } catch (error) {
     toast(error.message);
   }
@@ -604,7 +587,7 @@ window.editStudent = function editStudent(studentId) {
     guardianName: student.guardian_name || "",
     guardianPhone: student.guardian_phone || ""
   });
-  switchPage("faculty-manage", document.querySelector('.nav-item[data-page="faculty-manage"]'));
+  switchPage("admin-students", document.querySelector('.nav-item[data-page="admin-students"]'));
 };
 
 window.deleteStudent = async function deleteStudent(studentId) {
@@ -612,24 +595,25 @@ window.deleteStudent = async function deleteStudent(studentId) {
   try {
     await api(`/api/faculty/students/${studentId}`, { method: "DELETE" });
     toast("Student deleted.");
-    await loadFacultyManageData();
+    await loadAdminDashboard();
   } catch (error) {
     toast(error.message);
   }
 };
 
 window.editSubject = function editSubject(subjectId) {
-  const subject = state.facultySubjects.find((item) => item.id === subjectId);
+  const subject = state.subjects.find((item) => item.id === subjectId);
   if (!subject) return;
   fillForm("subject-create-form", {
     subjectId: subject.id,
     code: subject.code,
     name: subject.name,
+    facultyId: subject.faculty_id,
     semester: subject.semester,
     section: subject.section,
     attendanceThreshold: subject.attendance_threshold
   });
-  switchPage("faculty-manage", document.querySelector('.nav-item[data-page="faculty-manage"]'));
+  switchPage("admin-subjects", document.querySelector('.nav-item[data-page="admin-subjects"]'));
 };
 
 window.deleteSubject = async function deleteSubject(subjectId) {
@@ -637,8 +621,7 @@ window.deleteSubject = async function deleteSubject(subjectId) {
   try {
     await api(`/api/faculty/subjects/${subjectId}`, { method: "DELETE" });
     toast("Subject deleted.");
-    await loadFacultyManageData();
-    await loadFacultyDashboard();
+    await loadAdminDashboard();
   } catch (error) {
     toast(error.message);
   }
@@ -654,6 +637,8 @@ async function loadAdminDashboard() {
     { label: "Risk Cases", value: data.stats.riskStudents, note: "Student-subject shortage cases" }
   ]);
 
+  state.students = data.students;
+  state.subjects = data.subjects;
   state.adminFaculty = data.faculty;
   renderChart("admin-chart", data.chart, "");
 
@@ -675,7 +660,7 @@ async function loadAdminDashboard() {
     )
     .join("");
 
-  document.getElementById("admin-students-table").innerHTML = data.students
+  document.getElementById("students-table").innerHTML = data.students
     .map(
       (student) => `
         <tr>
@@ -683,12 +668,18 @@ async function loadAdminDashboard() {
           <td>${student.full_name}</td>
           <td>${student.program}</td>
           <td>${student.semester} / ${student.section}</td>
+          <td>
+            <div class="action-buttons">
+              <button class="ghost-btn mini" onclick="editStudent(${student.id})">Edit</button>
+              <button class="danger-btn mini" onclick="deleteStudent(${student.id})">Delete</button>
+            </div>
+          </td>
         </tr>
       `
     )
     .join("");
 
-  document.getElementById("admin-subjects-table").innerHTML = data.subjects
+  document.getElementById("subjects-table").innerHTML = data.subjects
     .map(
       (subject) => `
         <tr>
@@ -696,10 +687,26 @@ async function loadAdminDashboard() {
           <td>${subject.name}</td>
           <td>${subject.faculty_name}</td>
           <td>${subject.attendance_threshold}%</td>
+          <td>
+            <div class="action-buttons">
+              <button class="ghost-btn mini" onclick="editSubject(${subject.id})">Edit</button>
+              <button class="danger-btn mini" onclick="deleteSubject(${subject.id})">Delete</button>
+            </div>
+          </td>
         </tr>
       `
     )
     .join("");
+
+  document.getElementById("subject-faculty-select").innerHTML = data.faculty.length
+    ? data.faculty.map((faculty) => `<option value="${faculty.id}">${faculty.full_name}</option>`).join("")
+    : '<option value="">No faculty available</option>';
+
+  document.getElementById("assignment-subject-select").innerHTML = data.subjects.length
+    ? data.subjects.map((subject) => `<option value="${subject.id}">${subject.code} - ${subject.name}</option>`).join("")
+    : '<option value="">No subjects available</option>';
+
+  await loadAssignmentPanel();
 }
 
 async function saveFaculty(event) {
@@ -732,7 +739,7 @@ window.editFaculty = function editFaculty(facultyId) {
     employeeId: faculty.employee_id,
     department: faculty.department
   });
-  switchPage("admin-overview", document.querySelector('.nav-item[data-page="admin-overview"]'));
+  switchPage("admin-faculty", document.querySelector('.nav-item[data-page="admin-faculty"]'));
 };
 
 window.deleteFaculty = async function deleteFaculty(facultyId) {
@@ -809,6 +816,19 @@ async function downloadFile(url) {
   link.download = fileName;
   link.click();
   window.URL.revokeObjectURL(downloadUrl);
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const [, base64 = ""] = result.split(",");
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error("Could not read the selected file."));
+    reader.readAsDataURL(file);
+  });
 }
 
 function clearForm(formId) {

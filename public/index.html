@@ -277,13 +277,73 @@
             </div>
           </section>
 
-          <section class="page" data-page="faculty-manage">
+          <section class="page" data-page="admin-overview">
+            <div class="announcement-strip" id="admin-announcements"></div>
+            <div class="stats-grid" id="admin-stats"></div>
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <h3>Institution Chart</h3>
+                  <p>High-level snapshot of system-wide counts.</p>
+                </div>
+              </div>
+              <div id="admin-chart" class="chart-stack"></div>
+            </div>
+          </section>
+
+          <section class="page" data-page="admin-faculty">
+            <div class="card-grid">
+              <div class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h3>Add or Edit Faculty</h3>
+                    <p>Create and maintain faculty records from one place.</p>
+                  </div>
+                </div>
+                <form class="stack-form" id="faculty-create-form">
+                  <input type="hidden" name="facultyId" />
+                  <input name="fullName" placeholder="Faculty name" required />
+                  <input name="email" type="email" placeholder="Faculty email" required />
+                  <input name="employeeId" placeholder="Employee ID" required />
+                  <input name="department" placeholder="Department" required />
+                  <div class="button-row">
+                    <button class="primary-btn" type="submit">Save Faculty</button>
+                    <button class="ghost-btn" type="button" id="clear-faculty-form">Clear</button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h3>Faculty Control</h3>
+                    <p>Edit or delete faculty accounts.</p>
+                  </div>
+                </div>
+                <div class="table-wrap compact-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Employee ID</th>
+                        <th>Department</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-faculty-table"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="page" data-page="admin-students">
             <div class="card-grid">
               <div class="panel">
                 <div class="panel-header">
                   <div>
                     <h3>Add or Edit Student</h3>
-                    <p>Faculty can register and maintain students.</p>
+                    <p>Create student accounts and update registry details here.</p>
                   </div>
                 </div>
                 <form class="stack-form" id="student-create-form">
@@ -308,14 +368,66 @@
               <div class="panel">
                 <div class="panel-header">
                   <div>
+                    <h3>Bulk Import Students</h3>
+                    <p>Upload one Excel sheet to create multiple student accounts together.</p>
+                  </div>
+                  <button class="ghost-btn" type="button" id="student-template-download">Download Template</button>
+                </div>
+                <form class="stack-form" id="student-import-form">
+                  <input
+                    id="student-import-file"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    required
+                  />
+                  <p class="help-text">
+                    Required columns: <strong>fullName</strong>, <strong>email</strong>, <strong>rollNumber</strong>,
+                    <strong>program</strong>, <strong>semester</strong>, <strong>section</strong>.
+                    Optional columns: <strong>guardianName</strong>, <strong>guardianPhone</strong>.
+                  </p>
+                  <button class="primary-btn" type="submit">Import Excel Sheet</button>
+                </form>
+              </div>
+
+              <div class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h3>Student Registry</h3>
+                    <p>Central student list with edit and delete actions.</p>
+                  </div>
+                </div>
+                <div class="table-wrap compact-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Roll</th>
+                        <th>Name</th>
+                        <th>Program</th>
+                        <th>Semester</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="students-table"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="page" data-page="admin-subjects">
+            <div class="card-grid">
+              <div class="panel">
+                <div class="panel-header">
+                  <div>
                     <h3>Add or Edit Subject</h3>
-                    <p>Create a subject and maintain threshold settings.</p>
+                    <p>Create subjects, set thresholds, and assign faculty ownership.</p>
                   </div>
                 </div>
                 <form class="stack-form" id="subject-create-form">
                   <input type="hidden" name="subjectId" />
                   <input name="code" placeholder="Subject code" required />
                   <input name="name" placeholder="Subject name" required />
+                  <select name="facultyId" id="subject-faculty-select" required></select>
                   <div class="two-up">
                     <input name="semester" type="number" min="1" max="8" placeholder="Semester" required />
                     <input name="section" placeholder="Section" required />
@@ -334,36 +446,12 @@
                   </div>
                 </form>
               </div>
-            </div>
-
-            <div class="card-grid">
-              <div class="panel">
-                <div class="panel-header">
-                  <div>
-                    <h3>Student Registry</h3>
-                    <p>Edit or delete students from the local roster.</p>
-                  </div>
-                </div>
-                <div class="table-wrap compact-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Roll</th>
-                        <th>Name</th>
-                        <th>Semester</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody id="faculty-students-table"></tbody>
-                  </table>
-                </div>
-              </div>
 
               <div class="panel">
                 <div class="panel-header">
                   <div>
-                    <h3>Subject Registry</h3>
-                    <p>Edit, delete, and maintain subject ownership.</p>
+                    <h3>Subject Catalog</h3>
+                    <p>Manage the institution subject list and ownership.</p>
                   </div>
                 </div>
                 <div class="table-wrap compact-table">
@@ -372,11 +460,12 @@
                       <tr>
                         <th>Code</th>
                         <th>Subject</th>
+                        <th>Faculty</th>
                         <th>Threshold</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
-                    <tbody id="faculty-subjects-table"></tbody>
+                    <tbody id="subjects-table"></tbody>
                   </table>
                 </div>
               </div>
@@ -386,7 +475,7 @@
               <div class="panel-header">
                 <div>
                   <h3>Subject Assignment</h3>
-                  <p>Assign new students to a subject and remove them when needed.</p>
+                  <p>Assign students to subjects and manage enrollment.</p>
                 </div>
                 <select id="assignment-subject-select"></select>
               </div>
@@ -400,106 +489,6 @@
                   <h4>Assigned Students</h4>
                   <div id="assigned-students" class="list-stack"></div>
                 </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="page" data-page="admin-overview">
-            <div class="announcement-strip" id="admin-announcements"></div>
-            <div class="stats-grid" id="admin-stats"></div>
-            <div class="card-grid">
-              <div class="panel">
-                <div class="panel-header">
-                  <div>
-                    <h3>Institution Chart</h3>
-                    <p>High-level snapshot of system-wide counts.</p>
-                  </div>
-                </div>
-                <div id="admin-chart" class="chart-stack"></div>
-              </div>
-              <div class="panel">
-                <div class="panel-header">
-                  <div>
-                    <h3>Add or Edit Faculty</h3>
-                    <p>Admin-only faculty onboarding and maintenance.</p>
-                  </div>
-                </div>
-                <form class="stack-form" id="faculty-create-form">
-                  <input type="hidden" name="facultyId" />
-                  <input name="fullName" placeholder="Faculty name" required />
-                  <input name="email" type="email" placeholder="Faculty email" required />
-                  <input name="employeeId" placeholder="Employee ID" required />
-                  <input name="department" placeholder="Department" required />
-                  <div class="button-row">
-                    <button class="primary-btn" type="submit">Save Faculty</button>
-                    <button class="ghost-btn" type="button" id="clear-faculty-form">Clear</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-            <div class="card-grid">
-              <div class="panel">
-                <div class="panel-header">
-                  <div>
-                    <h3>Faculty Control</h3>
-                    <p>Edit or delete faculty accounts.</p>
-                  </div>
-                </div>
-                <div class="table-wrap compact-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Employee ID</th>
-                        <th>Department</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody id="admin-faculty-table"></tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="panel">
-                <div class="panel-header">
-                  <div>
-                    <h3>Students</h3>
-                    <p>Central student registry.</p>
-                  </div>
-                </div>
-                <div class="table-wrap compact-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Roll</th>
-                        <th>Name</th>
-                        <th>Program</th>
-                        <th>Semester</th>
-                      </tr>
-                    </thead>
-                    <tbody id="admin-students-table"></tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            <div class="panel">
-              <div class="panel-header">
-                <div>
-                  <h3>Subjects</h3>
-                  <p>Institution subject catalog and ownership.</p>
-                </div>
-              </div>
-              <div class="table-wrap compact-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Code</th>
-                      <th>Subject</th>
-                      <th>Faculty</th>
-                      <th>Threshold</th>
-                    </tr>
-                  </thead>
-                  <tbody id="admin-subjects-table"></tbody>
-                </table>
               </div>
             </div>
           </section>

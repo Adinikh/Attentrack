@@ -25,6 +25,11 @@ const studentSchema = z.object({
   guardianPhone: z.string().trim().optional().default("")
 });
 
+const bulkStudentImportSchema = z.object({
+  fileName: z.string().trim().min(1, "Excel file name is required."),
+  fileBase64: z.string().trim().min(1, "Excel file content is required.")
+});
+
 const facultySchema = z.object({
   fullName: z.string().trim().min(2, "Faculty name is required."),
   email: emailSchema,
@@ -38,7 +43,7 @@ const subjectSchema = z.object({
   semester: z.coerce.number().int().min(1).max(8),
   section: z.string().trim().min(1, "Section is required."),
   attendanceThreshold: z.coerce.number().int().min(50).max(100),
-  facultyId: z.coerce.number().int().positive().optional()
+  facultyId: z.coerce.number().int().positive("Faculty selection is required.")
 });
 
 const attendanceSchema = z.object({
@@ -78,6 +83,7 @@ function parseSchema(schema, payload) {
 
 module.exports = {
   assignmentSchema,
+  bulkStudentImportSchema,
   attendanceSchema,
   changePasswordSchema,
   facultySchema,
