@@ -1,10 +1,18 @@
 const PDFDocument = require("pdfkit");
 const XLSX = require("xlsx");
 
+function sanitizeSheetName(sheetName) {
+  const cleaned = String(sheetName || "Report")
+    .replace(/[\\/*?:[\]]/g, " ")
+    .trim();
+
+  return (cleaned || "Report").slice(0, 31);
+}
+
 function buildWorkbookBuffer(sheetName, rows) {
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(rows);
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  XLSX.utils.book_append_sheet(workbook, worksheet, sanitizeSheetName(sheetName));
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 

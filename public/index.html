@@ -156,10 +156,9 @@
               <div class="panel-header">
                 <div>
                   <h3>Report Exports</h3>
-                  <p>Download your attendance report in PDF or Excel.</p>
+                  <p>Download your attendance report in Excel.</p>
                 </div>
                 <div class="button-row">
-                  <button class="primary-btn small" id="student-export-pdf">Export PDF</button>
                   <button class="primary-btn small" id="student-export-xlsx">Export Excel</button>
                 </div>
               </div>
@@ -230,19 +229,25 @@
           </section>
 
           <section class="page" data-page="faculty-reports">
-            <div class="panel">
-              <div class="panel-header">
-                <div>
-                  <h3>Faculty Reports</h3>
-                  <p>Pick a subject to review class performance and export detailed reports.</p>
+              <div class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h3>Faculty Reports</h3>
+                    <p>Pick a subject to review class performance and export detailed reports.</p>
+                  </div>
+                  <div class="button-row">
+                    <select id="faculty-report-subject"></select>
+                    <button class="primary-btn small" id="faculty-export-xlsx">Export Excel</button>
+                  </div>
                 </div>
-                <div class="button-row">
-                  <select id="faculty-report-subject"></select>
-                  <button class="primary-btn small" id="faculty-export-pdf">Export PDF</button>
-                  <button class="primary-btn small" id="faculty-export-xlsx">Export Excel</button>
+                <div class="toolbar-row">
+                  <label class="check-item compact-check">
+                    <input id="faculty-critical-only" type="checkbox" checked />
+                    <span>Show only critical students</span>
+                  </label>
+                  <p class="help-text" id="faculty-attendance-summary"></p>
                 </div>
-              </div>
-              <div class="card-grid">
+                <div class="card-grid">
                 <div class="panel nested-panel">
                   <div class="panel-header">
                     <div>
@@ -482,6 +487,13 @@
               <div class="card-grid">
                 <div class="assignment-box">
                   <h4>Available Students</h4>
+                  <div class="toolbar-row">
+                    <label class="check-item compact-check">
+                      <input id="assignment-select-all" type="checkbox" />
+                      <span>Select all</span>
+                    </label>
+                    <p class="help-text" id="assignment-selection-count"></p>
+                  </div>
                   <div id="unassigned-students" class="checklist"></div>
                   <button class="primary-btn small" id="assign-students-btn">Assign Selected</button>
                 </div>

@@ -241,6 +241,16 @@ function ensureFacultyOwnsSubject(req, subjectId) {
   return subject;
 }
 
+function parsePositiveIntegerParam(value, label) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    const error = new Error(`Invalid ${label}.`);
+    error.status = 400;
+    throw error;
+  }
+  return parsed;
+}
+
 function buildStudentExportRows(summary) {
   return summary.subjects.map((subject) => ({
     SubjectCode: subject.code,
@@ -527,28 +537,9 @@ function registerRoutes(app) {
     }
   });
 
-  app.get("/api/faculty/report/:subjectId", requireRole("faculty", "admin"), (req, res, next) => {
-    try {
-      const subjectId = Number(req.params.subjectId);
-      ensureFacultyOwnsSubject(req, subjectId);
-      const report = buildFacultyExportRows(subjectId);
-      res.json({
-        subject: report.subject,
-        rows: report.rows,
-        chart: report.rows.map((row) => ({
-          label: row.RollNumber,
-          value: Number(row.AttendancePercentage.replace("%", "")),
-          threshold: Number(row.Threshold.replace("%", ""))
-        }))
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
-
   app.get("/api/faculty/report/:subjectId.xlsx", requireRole("faculty", "admin"), (req, res, next) => {
     try {
-      const subjectId = Number(req.params.subjectId);
+      const subjectId = parsePositiveIntegerParam(req.params.subjectId, "subject id");
       ensureFacultyOwnsSubject(req, subjectId);
       const report = buildFacultyExportRows(subjectId);
       sendWorkbook(res, `${report.subject.code}-attendance-report.xlsx`, report.subject.code, report.rows);
@@ -559,7 +550,7 @@ function registerRoutes(app) {
 
   app.get("/api/faculty/report/:subjectId.pdf", requireRole("faculty", "admin"), async (req, res, next) => {
     try {
-      const subjectId = Number(req.params.subjectId);
+      const subjectId = parsePositiveIntegerParam(req.params.subjectId, "subject id");
       ensureFacultyOwnsSubject(req, subjectId);
       const report = buildFacultyExportRows(subjectId);
       await sendPdf(
@@ -569,6 +560,26 @@ function registerRoutes(app) {
         `Faculty: ${report.subject.faculty_name || "Assigned"} | Threshold ${report.subject.attendance_threshold}%`,
         report.rows
       );
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/faculty/report/:subjectId", requireRole("faculty", "admin"), (req, res, next) => {
+    try {
+      const subjectId = parsePositiveIntegerParam(req.params.subjectId, "subject id");
+      ensureFacultyOwnsSubject(req, subjectId);
+      const report = buildFacultyExportRows(subjectId);
+      res.json({
+        subject: report.subject,
+        rows: report.rows,
+        chart: report.rows.map((row) => ({
+          label: row.RollNumber,
+          value: Number(row.AttendancePercentage.replace("%", "")),
+          threshold: Number(row.Threshold.replace("%", "")),
+          status: row.Status
+        }))
+      });
     } catch (error) {
       next(error);
     }

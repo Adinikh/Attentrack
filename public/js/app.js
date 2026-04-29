@@ -7,7 +7,8 @@ const state = {
   subjects: [],
   adminFaculty: [],
   selectedAttendanceRecords: [],
-  assignmentSubjectId: null
+  assignmentSubjectId: null,
+  showCriticalOnly: true
 };
 
 const navConfig = {
@@ -53,18 +54,14 @@ function bindEvents() {
   on("change-password-form", "submit", changePassword);
 
   on("student-history-select", "change", loadStudentHistory);
-  on("student-export-pdf", "click", () => downloadFile("/api/student/report.pdf"));
   on("student-export-xlsx", "click", () => downloadFile("/api/student/report.xlsx"));
   on("whatif-subject", "change", renderWhatIfProjection);
   on("whatif-upcoming", "input", renderWhatIfProjection);
 
   on("load-attendance-btn", "click", loadFacultyAttendance);
   on("save-attendance-btn", "click", saveAttendance);
+  on("faculty-critical-only", "change", toggleFacultyAttendanceFilter);
   on("faculty-report-subject", "change", loadFacultyReport);
-  on("faculty-export-pdf", "click", () => {
-    const subjectId = document.getElementById("faculty-report-subject").value;
-    if (subjectId) downloadFile(`/api/faculty/report/${subjectId}.pdf`);
-  });
   on("faculty-export-xlsx", "click", () => {
     const subjectId = document.getElementById("faculty-report-subject").value;
     if (subjectId) downloadFile(`/api/faculty/report/${subjectId}.xlsx`);
@@ -80,6 +77,8 @@ function bindEvents() {
   on("student-template-download", "click", () => downloadFile("/api/admin/students/template.xlsx"));
   on("assignment-subject-select", "change", loadAssignmentPanel);
   on("assign-students-btn", "click", assignStudentsToSubject);
+  on("assignment-select-all", "change", toggleSelectAllAssignments);
+  on("unassigned-students", "change", syncAssignmentSelectionControls);
 }
 
 function on(id, eventName, handler) {
@@ -372,7 +371,8 @@ async function loadFacultyAttendance(event) {
 }
 
 function renderFacultyAttendanceTable() {
-  document.getElementById("faculty-attendance-table").innerHTML = state.selectedAttendanceRecords
+  document.getElementById("faculty-attendance-table").innerHTML = state.selectedAttendanceRecords.length
+    ? state.selectedAttendanceRecords
     .map(
       (student) => `
         <tr>
@@ -389,7 +389,8 @@ function renderFacultyAttendanceTable() {
         </tr>
       `
     )
-    .join("");
+    .join("")
+    : '<tr><td colspan="5" class="help-text">No students available for this subject.</td></tr>';
 }
 
 window.setAttendance = function setAttendance(studentId, status) {
@@ -422,8 +423,16 @@ async function loadFacultyReport() {
   const subjectId = document.getElementById("faculty-report-subject").value;
   if (!subjectId) return;
   const data = await api(`/api/faculty/report/${subjectId}`);
-  renderChart("faculty-report-chart", data.chart, "%");
-  document.getElementById("faculty-report-table").innerHTML = data.rows
+  const visibleRows = state.showCriticalOnly ? data.rows.filter((row) => row.Status === "critical") : data.rows;
+  const visibleChart = state.showCriticalOnly ? data.chart.filter((row) => row.status === "critical") : data.chart;
+
+  document.getElementById("faculty-attendance-summary").textContent = state.showCriticalOnly
+    ? `${visibleRows.length} critical students shown out of ${data.rows.length}.`
+    : `Showing all ${data.rows.length} students.`;
+
+  renderChart("faculty-report-chart", visibleChart, "%");
+  document.getElementById("faculty-report-table").innerHTML = visibleRows.length
+    ? visibleRows
     .map(
       (row) => `
         <tr>
@@ -434,7 +443,8 @@ async function loadFacultyReport() {
         </tr>
       `
     )
-    .join("");
+    .join("")
+    : '<tr><td colspan="4" class="help-text">No students match the current filter.</td></tr>';
 }
 
 async function saveStudent(event) {
@@ -523,6 +533,10 @@ async function loadAssignmentPanel() {
         )
         .join("")
     : `<p class="help-text">No unassigned students available.</p>`;
+
+  document.getElementById("assignment-select-all").checked = false;
+  document.getElementById("assignment-select-all").indeterminate = false;
+  syncAssignmentSelectionControls();
 
   document.getElementById("assigned-students").innerHTML = data.assigned.length
     ? data.assigned
@@ -812,10 +826,12 @@ async function downloadFile(url) {
   const link = document.createElement("a");
   link.href = downloadUrl;
   const header = response.headers.get("content-disposition");
-  const fileName = header?.match(/filename="(.+)"/)?.[1] || "report";
+  const fileName = header?.match(/filename="?([^"]+)"?/)?.[1] || "report";
   link.download = fileName;
+  document.body.appendChild(link);
   link.click();
-  window.URL.revokeObjectURL(downloadUrl);
+  link.remove();
+  setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
 }
 
 function readFileAsBase64(file) {
@@ -864,6 +880,43 @@ function formatDate(value) {
 
 function capitalize(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function getVisibleFacultyAttendanceRecords() {
+  return state.showCriticalOnly
+    ? state.selectedAttendanceRecords.filter((student) => student.overallStatus === "critical")
+    : state.selectedAttendanceRecords;
+}
+
+function toggleFacultyAttendanceFilter() {
+  state.showCriticalOnly = document.getElementById("faculty-critical-only").checked;
+  loadFacultyReport();
+}
+
+function toggleSelectAllAssignments() {
+  const shouldSelectAll = document.getElementById("assignment-select-all").checked;
+  document.querySelectorAll("#unassigned-students input[type='checkbox']").forEach((input) => {
+    input.checked = shouldSelectAll;
+  });
+  syncAssignmentSelectionControls();
+}
+
+function syncAssignmentSelectionControls() {
+  const checkboxes = Array.from(document.querySelectorAll("#unassigned-students input[type='checkbox']"));
+  const checkedCount = checkboxes.filter((input) => input.checked).length;
+  const totalCount = checkboxes.length;
+  const selectAll = document.getElementById("assignment-select-all");
+  const counter = document.getElementById("assignment-selection-count");
+
+  if (selectAll) {
+    selectAll.checked = totalCount > 0 && checkedCount === totalCount;
+    selectAll.indeterminate = checkedCount > 0 && checkedCount < totalCount;
+    selectAll.disabled = totalCount === 0;
+  }
+
+  if (counter) {
+    counter.textContent = totalCount ? `${checkedCount} of ${totalCount} selected` : "No students available";
+  }
 }
 
 function getStatusForThreshold(percentage, threshold) {
